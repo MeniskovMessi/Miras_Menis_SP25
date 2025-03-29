@@ -11,14 +11,14 @@ AND f.rental_rate  > 1 --rate more than 1
 ORDER BY f.release_year, f.title ; --alphabetically ordered
 
 --The revenue earned by each rental store after March 2017 (columns: address and address2 – as one column, revenue)
-SELECT s.store_id, a.address, SUM(p.amount) AS revenue --selects necessary fields and summing up the amount
+SELECT s.store_id, CONCAT(a.address, ', ', COALESCE(a.address2, '')) AS full_address, SUM(p.amount) AS revenue --selects necessary fields and summing up the amount
 FROM store s 
-INNER JOIN address a USING (address_id) --joins to extract stores addresses (also the task says to concat columns address and address2, but there's null in the column address2)
+INNER JOIN address a USING (address_id) --joins to extract stores addresses
 INNER JOIN inventory i USING (store_id) -- use inventory and rental tables to reach the payment table
 INNER JOIN rental r USING (inventory_id) 
 INNER JOIN payment p USING (rental_id) --to sum the amounts
 WHERE payment_date >= '2017-04-01' --filter data that after march 2017, that means FROM the 1st of april of 2017
-GROUP BY s.store_id, a.address --grouping by store and its address
+GROUP BY s.store_id, full_address --grouping by store and its address
 ORDER BY revenue DESC --orders by revenue in descending order
 
 
@@ -36,6 +36,7 @@ LIMIT 5 --remain only top 5
 --Number of Drama, Travel, Documentary per year 
 --(columns: release_year, number_of_drama_movies, number_of_travel_movies, number_of_documentary_movies), 
 --sorted by release year in descending order. Dealing with NULL values is encouraged)
+/*
 WITH drama_movies AS (
 		SELECT f.release_year, COUNT(*) AS number_of_drama_movies --use three almost exact CTEs to calculate number of films by category and each YEAR AND THEN CALL them IN the main request
 		FROM category c
@@ -70,9 +71,22 @@ SELECT COALESCE(dm.release_year, tm.release_year, docm.release_year) AS release_
 FROM drama_movies dm
 FULL JOIN travel_movies tm USING (release_year) --	use FULL JOIN TO combine ALL the ROWS even tough there's NO matches BETWEEN TABLES 
 FULL JOIN documentary_movies docm USING (release_year)
+*/
+SELECT 
+    f.release_year,
+    SUM(CASE WHEN c.category_id = 7 THEN 1 ELSE 0 END) AS number_of_drama_movies,
+    SUM(CASE WHEN c.category_id = 16 THEN 1 ELSE 0 END) AS number_of_travel_movies,
+    SUM(CASE WHEN c.category_id = 6 THEN 1 ELSE 0 END) AS number_of_documentary_movies
+FROM film f
+INNER JOIN film_category fc USING (film_id)
+INNER JOIN category c USING (category_id)
+GROUP BY f.release_year
+ORDER BY f.release_year DESC
 
 
 --Which three employees generated the most revenue in 2017? They should be awarded a bonus for their outstANDing performance. 
+
+/*
 SELECT s.staff_id, s.first_name, s.last_name, sum(p.amount) AS revenue
 FROM staff s 
 INNER JOIN payment p USING (staff_id)
@@ -117,6 +131,22 @@ FROM staff_revenue sr
 INNER JOIN staff s USING (staff_id) --joins the staff TABLE TO GET fullnames OF staff
 INNER JOIN store_by_last_payment sb USING (staff_id) --calls the cte store_by_last_payment
 ORDER BY sr.revenue DESC; --orders BY revwnue IN descending ORDER
+*/
+
+WITH staff_revenue AS (
+	SELECT p.staff_id, s.store_id, MAX(p.payment_date) AS last_payment, SUM(p.amount) AS revenue
+	FROM payment p 
+	INNER JOIN staff s USING (staff_id)
+	WHERE EXTRACT(YEAR FROM payment_date) = 2017
+	GROUP BY p.staff_id, s.store_id
+)
+SELECT sr.staff_id, s.first_name, s.last_name, sr.store_id, sr.revenue
+FROM staff_revenue sr
+INNER JOIN staff s USING (staff_id)
+ORDER BY sr.revenue DESC 
+LIMIT 3
+
+
 
 
 --Which 5 movies were rented more than others (number of rentals), AND what's the expected age of the audience for these movies? 
@@ -139,7 +169,6 @@ INNER JOIN film_actor fa USING (actor_id) --bridge BETWEEN actor AND film TABLES
 INNER JOIN film f USING (film_id)
 GROUP BY a.first_name, a.last_name --GROUPS BY their fullname
 ORDER BY years_without_films DESC --orders IN descending ORDER TO VIEW who has the longest PERIOD OF time WITHOUT films
-
 
 
 
